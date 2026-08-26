@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import socket
 import sys
 from pathlib import Path
+from urllib.error import URLError
+from urllib.request import urlopen
 
 from depth_video.pipeline import ConversionOptions, convert_video
 from depth_video.video_io import write_demo_clip
@@ -46,10 +50,61 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def existing_app_url(port: int) -> str | None:
+    """Return the local UI URL if this app is already serving on `port`."""
+    for host in ("127.0.0.1", "localhost"):
+        url = f"http://{host}:{port}/api/health"
+        try:
+            with urlopen(url, timeout=1.0) as response:
+                payload = json.loads(response.read().decode())
+        except (URLError, TimeoutError, json.JSONDecodeError, OSError, ValueError):
+            continue
+        if payload.get("ok"):
+            return f"http://{host}:{port}"
+    return None
+
+
+def can_bind(host: str, port: int) -> bool:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    bind_host = "0.0.0.0" if host in {"0.0.0.0", "::", ""} else host
+    try:
+        sock.bind((bind_host, port))
+    except OSError:
+        return False
+    finally:
+        sock.close()
+    return True
+
+
+def choose_port(host: str, port: int) -> int:
+    if can_bind(host, port):
+        return port
+    for candidate in range(port + 1, port + 20):
+        if can_bind(host, candidate):
+            return candidate
+    raise OSError(f"No free port in {port}-{port + 19}")
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
+    already = existing_app_url(args.port)
+    if already:
+        print(f"Depth Video Generator is already running at {already}")
+        print("Open that URL in your browser. To start another copy: python3 app.py --port 7861")
+        return 0
+
+    try:
+        port = choose_port(args.host, args.port)
+    except OSError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    if port != args.port:
+        print(f"Port {args.port} is in use; serving on {port} instead.")
+
     import uvicorn
 
-    uvicorn.run("depth_video.server:app", host=args.host, port=args.port, reload=False)
+    print(f"Open http://127.0.0.1:{port}")
+    uvicorn.run("depth_video.server:app", host=args.host, port=port, reload=False)
     return 0
 
 

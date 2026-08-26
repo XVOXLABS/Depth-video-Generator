@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import socket
 from pathlib import Path
 
-from depth_video.cli import main
+from depth_video.cli import can_bind, choose_port, main
 from depth_video.video_io import probe_video, write_demo_clip
 
 
@@ -28,3 +29,24 @@ def test_demo_command_fake(tmp_path: Path):
     assert (tmp_path / "demo.mp4").exists()
     depth = tmp_path / "demo_depth.mp4"
     assert depth.exists() and depth.stat().st_size > 0
+
+
+def test_can_bind_detects_occupied_port():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(("127.0.0.1", 0))
+    sock.listen(1)
+    port = sock.getsockname()[1]
+    try:
+        assert can_bind("127.0.0.1", port) is False
+        assert choose_port("127.0.0.1", port) != port
+    finally:
+        sock.close()
+
+
+def test_serve_reports_existing_app(monkeypatch, capsys):
+    monkeypatch.setattr("depth_video.cli.existing_app_url", lambda port: "http://127.0.0.1:7860")
+    code = main(["serve", "--port", "7860"])
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "already running at http://127.0.0.1:7860" in captured.out

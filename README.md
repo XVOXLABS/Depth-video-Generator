@@ -52,7 +52,7 @@ The first conversion of a given encoder/metric pair stores checkpoints in `./che
 python3 app.py
 ```
 
-Then open [http://127.0.0.1:7860](http://127.0.0.1:7860). Drop a video of any length, pick a model, and generate. The Small encoder is the default (Apache-2.0, fastest). Use Base or Large when you have more VRAM and want higher quality.
+Then open [http://127.0.0.1:7860](http://127.0.0.1:7860). If that port is already taken, the command reuses the running app or moves to the next free port. Drop a video of any length, pick a model, and generate. The Small encoder is the default (Apache-2.0, fastest). Use Base or Large when you have more VRAM and want higher quality.
 
 Useful environment variables:
 

@@ -23,7 +23,9 @@ try:
 
     XFORMERS_AVAILABLE = True
 except ImportError:
-    print("xFormers not available")
+    import logging
+
+    logging.getLogger(__name__).debug("xFormers not available")
     XFORMERS_AVAILABLE = False
 
 
