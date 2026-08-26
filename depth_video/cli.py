@@ -3,8 +3,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import signal
 import socket
+import subprocess
 import sys
+import time
 from pathlib import Path
 from urllib.error import URLError
 from urllib.request import urlopen
@@ -24,6 +28,11 @@ def build_parser() -> argparse.ArgumentParser:
     serve = sub.add_parser("serve", help="Start the local web app")
     serve.add_argument("--host", default="0.0.0.0")
     serve.add_argument("--port", type=int, default=7860)
+    serve.add_argument(
+        "--replace",
+        action="store_true",
+        help="Stop whatever is bound to this port and start a fresh server",
+    )
 
     convert = sub.add_parser("convert", help="Convert a video from the command line")
     convert.add_argument("input", type=Path, help="Input video path")
@@ -67,6 +76,41 @@ def existing_app_url(port: int) -> str | None:
     return None
 
 
+def pids_listening(port: int) -> list[int]:
+    try:
+        out = subprocess.check_output(["ss", "-ltnp", f"sport = :{port}"], text=True)
+    except (FileNotFoundError, subprocess.CalledProcessError, OSError):
+        return []
+    found: list[int] = []
+    for match in re.finditer(r"pid=(\d+)", out):
+        pid = int(match.group(1))
+        if pid not in found:
+            found.append(pid)
+    return found
+
+
+def terminate_port(port: int, timeout: float = 8.0) -> None:
+    deadline = time.time() + timeout
+    for pid in pids_listening(port):
+        if pid == os.getpid():
+            continue
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    while time.time() < deadline:
+        if not pids_listening(port) and (can_bind("0.0.0.0", port) or can_bind("127.0.0.1", port)):
+            return
+        time.sleep(0.15)
+    for pid in pids_listening(port):
+        if pid == os.getpid():
+            continue
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+
 def can_bind(host: str, port: int) -> bool:
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -90,11 +134,18 @@ def choose_port(host: str, port: int) -> int:
 
 
 def cmd_serve(args: argparse.Namespace) -> int:
-    already = existing_app_url(args.port)
-    if already:
-        print(f"Depth Video Generator is already running at {already}")
-        print("Open that URL in your browser. To start another copy: python3 app.py --port 7861")
-        return 0
+    if args.replace:
+        print(f"Stopping any process on port {args.port} so this code can load…")
+        terminate_port(args.port)
+    else:
+        already = existing_app_url(args.port)
+        if already:
+            print(f"Depth Video Generator is already running at {already}")
+            print("Open that URL in your browser.")
+            print("That copy keeps running until you stop it. To load new code:")
+            print("  python3 app.py --replace")
+            print("To start another copy: python3 app.py --port 7861")
+            return 0
 
     try:
         port = choose_port(args.host, args.port)

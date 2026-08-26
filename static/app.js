@@ -91,6 +91,7 @@ async function loadHealth() {
     } else if (selectedFile) {
       convertBtn.disabled = false;
     }
+    await restoreLastJob();
   } catch {
     deviceChip.textContent = "Server offline";
   }
@@ -115,20 +116,45 @@ function formPayload() {
   return body;
 }
 
-function listen(jobId) {
-  if (eventSource) eventSource.close();
-  eventSource = new EventSource(`/api/jobs/${jobId}/events`);
-  eventSource.onmessage = (event) => {
-    const job = JSON.parse(event.data);
-    applyJob(job);
-    if (["done", "error", "cancelled"].includes(job.status)) {
-      eventSource.close();
-      eventSource = null;
+let pollTimer = null;
+let shownResultId = null;
+const LAST_JOB_KEY = "depthVideoLastJobId";
+
+function stopListening() {
+  if (eventSource) {
+    eventSource.close();
+    eventSource = null;
+  }
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+}
+
+function showResult(job) {
+  downloadBtn.href = `/api/jobs/${job.id}/download`;
+  downloadBtn.hidden = false;
+  downloadBtn.removeAttribute("hidden");
+  const hint = document.getElementById("resultHint");
+  if (hint) {
+    hint.hidden = false;
+    hint.textContent = "Finished. Preview is on the right — or click Download depth MP4 to save the file.";
+  }
+  if (shownResultId === job.id && depthPlayer.getAttribute("src")) {
+    return;
+  }
+  shownResultId = job.id;
+  const url = `/api/jobs/${job.id}/video?t=${Date.now()}`;
+  depthPlayer.removeAttribute("src");
+  depthPlayer.src = url;
+  depthPlayer.load();
+  const play = () => depthPlayer.play().catch(() => {});
+  depthPlayer.addEventListener("loadeddata", play, { once: true });
+  depthPlayer.onerror = () => {
+    if (hint) {
+      hint.hidden = false;
+      hint.textContent = "The file is ready on disk, but this browser could not preview it. Click Download depth MP4.";
     }
-  };
-  eventSource.onerror = () => {
-    if (!lastJob || ["done", "error", "cancelled"].includes(lastJob.status)) return;
-    setStatus("Converting", "Still working… if this sits on 0% for several minutes on CPU, wait for the first 32-frame window to finish.", lastJob.progress);
   };
 }
 
@@ -144,12 +170,48 @@ function applyJob(job) {
   };
   setStatus(labels[job.status] || job.status, job.message, job.progress);
   cancelBtn.hidden = !["queued", "running"].includes(job.status);
-  convertBtn.disabled = ["queued", "running"].includes(job.status);
+  convertBtn.disabled = ["queued", "running"].includes(job.status) || !torchReady || !selectedFile;
   if (job.status === "done") {
-    depthPlayer.src = `/api/jobs/${job.id}/video?t=${Date.now()}`;
-    downloadBtn.href = `/api/jobs/${job.id}/download`;
-    downloadBtn.hidden = false;
+    localStorage.setItem(LAST_JOB_KEY, job.id);
+    showResult(job);
     convertBtn.disabled = !selectedFile || !torchReady;
+    stopListening();
+  }
+}
+
+function listen(jobId) {
+  stopListening();
+  localStorage.setItem(LAST_JOB_KEY, jobId);
+  eventSource = new EventSource(`/api/jobs/${jobId}/events`);
+  eventSource.onmessage = (event) => {
+    const job = JSON.parse(event.data);
+    applyJob(job);
+  };
+  eventSource.onerror = () => {
+    if (lastJob && ["done", "error", "cancelled"].includes(lastJob.status)) {
+      stopListening();
+    }
+  };
+  pollTimer = setInterval(async () => {
+    try {
+      const res = await fetch(`/api/jobs/${jobId}`);
+      if (!res.ok) return;
+      applyJob(await res.json());
+    } catch {
+      /* keep polling until the job finishes */
+    }
+  }, 1000);
+}
+
+async function restoreLastJob() {
+  const jobId = localStorage.getItem(LAST_JOB_KEY);
+  if (!jobId) return;
+  try {
+    const res = await fetch(`/api/jobs/${jobId}`);
+    if (!res.ok) return;
+    applyJob(await res.json());
+  } catch {
+    /* ignore */
   }
 }
 
@@ -160,6 +222,9 @@ convertBtn.addEventListener("click", async () => {
     return;
   }
   convertBtn.disabled = true;
+  shownResultId = null;
+  downloadBtn.hidden = true;
+  depthPlayer.removeAttribute("src");
   setStatus("Uploading", "Sending video to the converter…", 0.02);
   try {
     const res = await fetch("/api/jobs", { method: "POST", body: formPayload() });

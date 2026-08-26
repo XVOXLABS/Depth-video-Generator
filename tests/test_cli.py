@@ -50,3 +50,22 @@ def test_serve_reports_existing_app(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert code == 0
     assert "already running at http://127.0.0.1:7860" in captured.out
+    assert "python3 app.py --replace" in captured.out
+
+
+def test_serve_replace_skips_reuse(monkeypatch, capsys):
+    calls = []
+
+    def fake_run(*_args, **_kwargs):
+        calls.append("run")
+
+    monkeypatch.setattr("depth_video.cli.existing_app_url", lambda port: "http://127.0.0.1:7860")
+    monkeypatch.setattr("depth_video.cli.terminate_port", lambda port: calls.append(f"kill:{port}"))
+    monkeypatch.setattr("depth_video.cli.choose_port", lambda host, port: port)
+    monkeypatch.setattr("uvicorn.run", fake_run)
+    code = main(["serve", "--port", "7860", "--replace"])
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "kill:7860" in calls
+    assert "run" in calls
+    assert "already running" not in captured.out

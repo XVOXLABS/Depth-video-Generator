@@ -153,7 +153,49 @@ class JobManager:
 
     def get(self, job_id: str) -> Job | None:
         with self._lock:
-            return self._jobs.get(job_id)
+            cached = self._jobs.get(job_id)
+        if cached:
+            return cached
+        restored = self._restore(job_id)
+        if restored is None:
+            return None
+        with self._lock:
+            return self._jobs.setdefault(job_id, restored)
+
+    def _restore(self, job_id: str) -> Job | None:
+        job_dir = JOBS_DIR / job_id
+        result_path = job_dir / "result.json"
+        progress_path = job_dir / "progress.json"
+        source = result_path if result_path.exists() else progress_path
+        if not source.exists():
+            return None
+        try:
+            payload = json.loads(source.read_text())
+        except (json.JSONDecodeError, OSError):
+            return None
+        output = None
+        result = payload.get("result")
+        if isinstance(result, dict) and result.get("output_path"):
+            output = Path(result["output_path"])
+        if output is None or not output.exists():
+            matches = sorted(OUTPUTS_DIR.glob(f"*_{job_id}_depth.mp4"))
+            if matches:
+                output = matches[0]
+        uploads = [p for p in job_dir.iterdir() if p.suffix.lower() in {".mp4", ".mov", ".mkv", ".webm", ".avi"}]
+        original = uploads[0].name if uploads else f"{job_id}.mp4"
+        job = Job(
+            id=job_id,
+            status=str(payload.get("status") or "done"),
+            message=str(payload.get("message") or "Done"),
+            progress=float(payload.get("progress") or (1.0 if payload.get("status") == "done" else 0.0)),
+            stage=str(payload.get("stage") or payload.get("status") or "done"),
+            error=payload.get("error"),
+            input_path=uploads[0] if uploads else None,
+            output_path=output,
+            original_name=original,
+            result=result if isinstance(result, dict) else None,
+        )
+        return job
 
     def request_cancel(self, job_id: str) -> Job | None:
         with self._lock:

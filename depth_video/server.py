@@ -35,7 +35,14 @@ app.add_middleware(
 )
 
 
-@app.get("/api/health")
+def _ready_output(job_id: str):
+    job = get_manager().get(job_id)
+    if job is None or not job.output_path or not job.output_path.exists():
+        raise HTTPException(404, "Output not ready")
+    return job
+
+
+@app.api_route("/api/health", methods=["GET", "HEAD"])
 def health():
     device = detect_device()
     torch_ok = True
@@ -111,7 +118,7 @@ async def create_job(
     return JSONResponse(job.snapshot())
 
 
-@app.get("/api/jobs/{job_id}")
+@app.api_route("/api/jobs/{job_id}", methods=["GET", "HEAD"])
 def get_job(job_id: str):
     job = get_manager().get(job_id)
     if job is None:
@@ -154,24 +161,33 @@ async def job_events(job_id: str):
     )
 
 
-@app.get("/api/jobs/{job_id}/video")
+@app.api_route("/api/jobs/{job_id}/video", methods=["GET", "HEAD"])
 def job_video(job_id: str):
-    job = get_manager().get(job_id)
-    if job is None or not job.output_path or not job.output_path.exists():
-        raise HTTPException(404, "Output not ready")
-    return FileResponse(job.output_path, media_type="video/mp4", filename=job.output_path.name)
-
-
-@app.get("/api/jobs/{job_id}/download")
-def job_download(job_id: str):
-    job = get_manager().get(job_id)
-    if job is None or not job.output_path or not job.output_path.exists():
-        raise HTTPException(404, "Output not ready")
+    job = _ready_output(job_id)
+    # Inline preview. Setting filename= makes Starlette send Content-Disposition:
+    # attachment, which leaves <video> blank even though conversion succeeded.
     return FileResponse(
         job.output_path,
         media_type="video/mp4",
-        filename=job.output_path.name,
-        headers={"Content-Disposition": f'attachment; filename="{job.output_path.name}"'},
+        content_disposition_type="inline",
+        headers={
+            "Content-Disposition": "inline",
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@app.api_route("/api/jobs/{job_id}/download", methods=["GET", "HEAD"])
+def job_download(job_id: str):
+    job = _ready_output(job_id)
+    name = job.output_path.name.replace('"', "")
+    return FileResponse(
+        job.output_path,
+        media_type="video/mp4",
+        filename=name,
+        content_disposition_type="attachment",
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
     )
 
 

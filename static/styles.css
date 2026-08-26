@@ -213,10 +213,25 @@ button, .download {
   cursor: not-allowed;
 }
 
-.ghost, .download {
+.ghost {
   background: transparent;
   color: var(--text);
   border: 1px solid var(--line);
+}
+
+.download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 16px;
+  background: linear-gradient(90deg, var(--accent), #ffb347);
+  color: #1a0d07;
+  font-weight: 700;
+  min-width: 220px;
+}
+
+.download[hidden] {
+  display: none !important;
 }
 
 .hint { font-size: 13px; line-height: 1.45; margin-top: 14px; }
@@ -257,8 +272,6 @@ button, .download {
 
 figure { margin: 0; }
 figcaption { margin-bottom: 6px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
-
-.download { display: inline-block; margin-top: 16px; }
 
 footer {
   margin-top: 26px;
