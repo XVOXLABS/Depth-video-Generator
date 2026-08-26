@@ -50,15 +50,23 @@ The first conversion of a given encoder/metric pair stores checkpoints in `./che
 
 ## Web app
 
+The UI is a **local** server. The browser has to run on the **same computer** as `python3 app.py`. Opening `http://localhost:7860` on your laptop will not work if the process is running in a Cursor Cloud Agent (that is a different machine).
+
+### On your computer
+
 ```bash
 python3 app.py
 ```
 
-Then open [http://127.0.0.1:7860](http://127.0.0.1:7860). If that port is already taken by this app, the command prints the live URL instead of starting a second copy. Restart with new code:
+Then open [http://127.0.0.1:7860](http://127.0.0.1:7860) in a browser on that same machine. If the port is already taken by this app, the command prints the live URL instead of starting a second copy. Restart with new code:
 
 ```bash
 python3 app.py --replace
 ```
+
+### In a Cursor Cloud Agent
+
+Use **Take control** on the agent desktop and open `http://127.0.0.1:7860` there, or check this branch out locally and run the commands above.
 
 Drop a video of any length, pick a model, and generate. When it finishes, the depth clip plays on the right and **Download depth MP4** saves the file. The Small encoder is the default (Apache-2.0, fastest). Use Base or Large when you have more VRAM and want higher quality.
 

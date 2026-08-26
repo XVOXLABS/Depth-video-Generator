@@ -8,7 +8,7 @@
   --accent-2: #ffd27a;
   --ok: #8ef0c4;
   --shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
-  font-family: "Outfit", sans-serif;
+  font-family: "Segoe UI", system-ui, sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -66,7 +66,7 @@ body {
 
 h1 {
   margin: 2px 0 0;
-  font-family: "Fraunces", serif;
+  font-family: Georgia, "Times New Roman", serif;
   font-size: 32px;
   font-weight: 700;
   letter-spacing: -0.03em;

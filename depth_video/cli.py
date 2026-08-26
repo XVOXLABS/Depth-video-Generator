@@ -162,7 +162,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
         already = existing_app_url(args.port)
         if already:
             print(f"Depth Video Generator is already running at {already}")
-            print("Open that URL in your browser.")
+            print_browser_hint(args.port)
             print("That copy keeps running until you stop it. To load new code:")
             print("  python3 app.py --replace")
             print("To start another copy: python3 app.py --port 7861")
@@ -178,9 +178,17 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
     import uvicorn
 
-    print(f"Open http://127.0.0.1:{port}")
+    print(f"Depth Video Generator listening on http://127.0.0.1:{port}")
+    print_browser_hint(port)
     uvicorn.run("depth_video.server:app", host=args.host, port=port, reload=False)
     return 0
+
+
+def print_browser_hint(port: int) -> None:
+    print(f"Open http://127.0.0.1:{port} in a browser on THIS computer.")
+    print("localhost only works on the machine that is running python3 app.py.")
+    print("A Cursor Cloud Agent is a remote VM — your laptop's localhost will not reach it.")
+    print("Use Take control on the agent desktop, or clone the branch and run python3 app.py locally.")
 
 
 def cmd_convert(args: argparse.Namespace) -> int:
