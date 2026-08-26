@@ -17,6 +17,8 @@ def test_health():
     body = res.json()
     assert body["ok"] is True
     assert "vits" in body["encoders"]
+    assert "torch" in body
+    assert "device" in body
 
 
 def test_index_served():

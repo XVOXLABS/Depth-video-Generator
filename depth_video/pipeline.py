@@ -51,9 +51,9 @@ class CancelledError(RuntimeError):
     pass
 
 
-def _emit(progress: ProgressCallback | None, **payload) -> None:
-    if progress:
-        progress(payload)
+def _emit(callback: ProgressCallback | None, **payload) -> None:
+    if callback:
+        callback(payload)
 
 
 def _compose_frame(src: np.ndarray, depth_rgb: np.ndarray, layout: str) -> np.ndarray:

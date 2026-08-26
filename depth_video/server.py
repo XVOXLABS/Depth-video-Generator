@@ -38,8 +38,14 @@ app.add_middleware(
 @app.get("/api/health")
 def health():
     device = detect_device()
+    torch_ok = True
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        torch_ok = False
     return {
         "ok": True,
+        "torch": torch_ok,
         "device": device.kind,
         "device_name": device.name,
         "fp16": device.supports_fp16,

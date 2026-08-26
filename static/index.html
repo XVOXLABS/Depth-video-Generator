@@ -25,6 +25,10 @@
       </div>
       <div class="device" id="deviceChip">Detecting hardware…</div>
     </header>
+    <p class="banner" id="torchBanner" hidden>
+      PyTorch is not installed, so the neural model cannot run. Install it with
+      <code>pip install -r requirements.txt</code> (use a CUDA wheel if you have an NVIDIA GPU).
+    </p>
 
     <main class="layout">
       <section class="panel input-panel">
@@ -99,12 +103,20 @@
                 <small>−1 processes the entire video</small>
               </label>
               <label>
+                Model input size
+                <input type="number" name="input_size" id="input_size" min="196" max="770" step="14" value="518" />
+                <small>518 is the trained size. Lower this on CPU.</small>
+              </label>
+            </div>
+            <div class="row">
+              <label>
                 Inference
                 <select name="mode" id="mode">
                   <option value="windowed" selected>Windowed · official quality</option>
                   <option value="streaming">Streaming · lower VRAM</option>
                 </select>
               </label>
+              <span></span>
             </div>
             <div class="toggles">
               <label class="check"><input type="checkbox" id="keep_audio" checked /> Keep original audio</label>

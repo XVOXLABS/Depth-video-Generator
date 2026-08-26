@@ -17,7 +17,7 @@ def detect_device() -> RuntimeDevice:
     try:
         import torch
     except ImportError:
-        return RuntimeDevice("cpu", "CPU (PyTorch not installed)", "cpu", False)
+        return RuntimeDevice("cpu", "CPU · PyTorch not installed", "cpu", False)
 
     if override in {"cpu", "cuda", "mps"}:
         if override == "cuda" and not torch.cuda.is_available():

@@ -199,6 +199,14 @@ def create_backend(
         if progress:
             progress("Using fake depth backend (DEPTH_VIDEO_BACKEND)", None)
         return FakeDepthBackend(encoder=encoder, metric=metric)
+    try:
+        import torch  # noqa: F401
+    except ImportError as exc:
+        raise RuntimeError(
+            "PyTorch is required for Video Depth Anything. "
+            "Install it with `pip install torch torchvision` "
+            "(use the CUDA wheel from pytorch.org if you have an NVIDIA GPU)."
+        ) from exc
     return VideoDepthAnythingBackend(
         encoder=encoder,
         metric=metric,

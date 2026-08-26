@@ -64,7 +64,9 @@ async function loadHealth() {
   try {
     const res = await fetch("/api/health");
     const data = await res.json();
-    deviceChip.textContent = `${data.device_name} · ${data.device.toUpperCase()}`;
+    deviceChip.textContent = data.device_name || data.device;
+    const banner = document.getElementById("torchBanner");
+    if (banner) banner.hidden = Boolean(data.torch);
   } catch {
     deviceChip.textContent = "Server offline";
   }
@@ -80,6 +82,7 @@ function formPayload() {
   body.append("max_res", document.getElementById("max_res").value);
   body.append("target_fps", document.getElementById("target_fps").value);
   body.append("max_len", document.getElementById("max_len").value);
+  body.append("input_size", document.getElementById("input_size").value);
   body.append("mode", document.getElementById("mode").value);
   body.append("keep_audio", document.getElementById("keep_audio").checked);
   body.append("invert", document.getElementById("invert").checked);
