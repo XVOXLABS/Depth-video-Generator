@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from depth_video.device import detect_device
+from depth_video.ffmpeg_bin import ffmpeg_status
 from depth_video.jobs import get_manager
 from depth_video.paths import STATIC_DIR, UPLOADS_DIR, ensure_runtime_dirs
 from depth_video.pipeline import ConversionOptions
@@ -50,9 +51,13 @@ def health():
         import torch  # noqa: F401
     except ImportError:
         torch_ok = False
+    ffmpeg = ffmpeg_status()
     return {
         "ok": True,
         "torch": torch_ok,
+        "ffmpeg": ffmpeg.ok,
+        "ffmpeg_path": ffmpeg.path,
+        "ffmpeg_hint": ffmpeg.hint,
         "device": device.kind,
         "device_name": device.name,
         "fp16": device.supports_fp16,

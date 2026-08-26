@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import signal
 import socket
 import subprocess
@@ -57,8 +58,9 @@ def build_parser() -> argparse.ArgumentParser:
     demo.add_argument("--encoder", choices=ENCODERS, default="vits")
     demo.add_argument("--fake", action="store_true")
 
-    setup = sub.add_parser("setup", help="Install PyTorch for this Python interpreter")
+    setup = sub.add_parser("setup", help="Install PyTorch and check FFmpeg for this machine")
     setup.add_argument("--cpu", action="store_true", help="Install the CPU wheel from pytorch.org")
+    setup.add_argument("--ffmpeg", action="store_true", help="Install FFmpeg with Homebrew or apt when possible")
     return parser
 
 
@@ -180,6 +182,13 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
     print(f"Depth Video Generator listening on http://127.0.0.1:{port}")
     print_browser_hint(port)
+    from depth_video.ffmpeg_bin import ffmpeg_status
+
+    ffmpeg = ffmpeg_status()
+    if ffmpeg.ok:
+        print(f"FFmpeg: {ffmpeg.path}")
+    else:
+        print(ffmpeg.hint, file=sys.stderr)
     uvicorn.run("depth_video.server:app", host=args.host, port=port, reload=False)
     return 0
 
@@ -256,13 +265,39 @@ def cmd_demo(args: argparse.Namespace) -> int:
 
 
 def cmd_setup(args: argparse.Namespace) -> int:
-    import subprocess
+    from depth_video.ffmpeg_bin import ffmpeg_status, install_hint
 
     cmd = [sys.executable, "-m", "pip", "install", "torch", "torchvision"]
     if args.cpu:
         cmd += ["--index-url", "https://download.pytorch.org/whl/cpu"]
     print("Running:", " ".join(cmd))
-    return subprocess.call(cmd)
+    code = subprocess.call(cmd)
+    if code != 0:
+        return code
+
+    ffmpeg = ffmpeg_status()
+    if ffmpeg.ok:
+        print(f"FFmpeg is ready: {ffmpeg.path}")
+        return 0
+    if args.ffmpeg:
+        installer = None
+        if sys.platform == "darwin" and shutil.which("brew"):
+            installer = ["brew", "install", "ffmpeg"]
+        elif sys.platform.startswith("linux") and shutil.which("apt-get"):
+            installer = ["sudo", "apt-get", "install", "-y", "ffmpeg"]
+        if installer:
+            print("Running:", " ".join(installer))
+            code = subprocess.call(installer)
+            ffmpeg = ffmpeg_status()
+            if ffmpeg.ok:
+                print(f"FFmpeg is ready: {ffmpeg.path}")
+                return code
+            return code or 1
+        print(install_hint(), file=sys.stderr)
+        return 1
+    print(install_hint(), file=sys.stderr)
+    print("Or run: python3 -m depth_video setup --ffmpeg")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:

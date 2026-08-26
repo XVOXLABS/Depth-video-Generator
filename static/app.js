@@ -19,6 +19,11 @@ let currentJob = null;
 let eventSource = null;
 let lastJob = null;
 let torchReady = false;
+let ffmpegReady = false;
+
+function toolsReady() {
+  return torchReady && ffmpegReady;
+}
 
 function formatElapsed(seconds) {
   const total = Math.max(0, Math.round(seconds || 0));
@@ -51,11 +56,15 @@ function useFile(file) {
   inputVideo.src = url;
   sourcePlayer.src = url;
   inputWrap.hidden = false;
-  convertBtn.disabled = !torchReady;
+  convertBtn.disabled = !toolsReady();
   downloadBtn.hidden = true;
   depthPlayer.removeAttribute("src");
   if (!torchReady) {
     setStatus("Setup needed", "Install PyTorch with python3 -m pip install torch torchvision, then restart the app.", 0);
+    return;
+  }
+  if (!ffmpegReady) {
+    setStatus("Setup needed", "Install FFmpeg with brew install ffmpeg, then restart the app.", 0);
     return;
   }
   setStatus("Ready", "File loaded. Choose a model and generate a depth video.", 0);
@@ -81,12 +90,15 @@ async function loadHealth() {
     const res = await fetch("/api/health");
     const data = await res.json();
     torchReady = Boolean(data.torch);
+    ffmpegReady = data.ffmpeg !== false;
     deviceChip.textContent = data.device_name || data.device;
     const torchBanner = document.getElementById("torchBanner");
     if (torchBanner) torchBanner.hidden = torchReady;
+    const ffmpegBanner = document.getElementById("ffmpegBanner");
+    if (ffmpegBanner) ffmpegBanner.hidden = ffmpegReady;
     const cpuBanner = document.getElementById("cpuBanner");
     if (cpuBanner) cpuBanner.hidden = !data.cpu_inference || !torchReady;
-    if (!torchReady) {
+    if (!toolsReady()) {
       convertBtn.disabled = true;
     } else if (selectedFile) {
       convertBtn.disabled = false;
@@ -170,11 +182,11 @@ function applyJob(job) {
   };
   setStatus(labels[job.status] || job.status, job.message, job.progress);
   cancelBtn.hidden = !["queued", "running"].includes(job.status);
-  convertBtn.disabled = ["queued", "running"].includes(job.status) || !torchReady || !selectedFile;
+  convertBtn.disabled = ["queued", "running"].includes(job.status) || !toolsReady() || !selectedFile;
   if (job.status === "done") {
     localStorage.setItem(LAST_JOB_KEY, job.id);
     showResult(job);
-    convertBtn.disabled = !selectedFile || !torchReady;
+    convertBtn.disabled = !selectedFile || !toolsReady();
     stopListening();
   }
 }
@@ -221,6 +233,10 @@ convertBtn.addEventListener("click", async () => {
     setStatus("Setup needed", "Install PyTorch first: python3 -m pip install torch torchvision", 0);
     return;
   }
+  if (!ffmpegReady) {
+    setStatus("Setup needed", "Install FFmpeg first: brew install ffmpeg", 0);
+    return;
+  }
   convertBtn.disabled = true;
   shownResultId = null;
   downloadBtn.hidden = true;
@@ -234,7 +250,7 @@ convertBtn.addEventListener("click", async () => {
     listen(job.id);
   } catch (error) {
     setStatus("Failed", error.message || "Could not start conversion", 0);
-    convertBtn.disabled = !selectedFile || !torchReady;
+    convertBtn.disabled = !selectedFile || !toolsReady();
   }
 });
 

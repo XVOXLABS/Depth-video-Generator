@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
 import numpy as np
+
+from depth_video.ffmpeg_bin import find_tool, require_ffmpeg, require_ffprobe
 
 
 def _run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
@@ -21,13 +22,12 @@ def write_demo_clip(
     size: str = "640x360",
 ) -> Path:
     """Write a short synthetic MP4 so a first run does not need an input file."""
-    if not shutil.which("ffmpeg"):
-        raise RuntimeError("ffmpeg is required to create a demo clip")
+    ffmpeg = require_ffmpeg()
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     _run(
         [
-            "ffmpeg",
+            ffmpeg,
             "-y",
             "-loglevel",
             "error",
@@ -64,11 +64,12 @@ def probe_video(path: str | Path) -> VideoInfo:
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(path)
-    if not shutil.which("ffprobe"):
+    ffprobe = require_ffprobe()
+    if not ffprobe:
         return _probe_with_opencv(path)
 
     cmd = [
-        "ffprobe",
+        ffprobe,
         "-v",
         "error",
         "-print_format",
@@ -222,8 +223,7 @@ class FFmpegWriter:
     """Stream RGB frames into an H.264 MP4 without holding the video in RAM."""
 
     def __init__(self, path: str | Path, width: int, height: int, fps: float, crf: int = 18) -> None:
-        if not shutil.which("ffmpeg"):
-            raise RuntimeError("ffmpeg is required to write output videos")
+        ffmpeg = require_ffmpeg()
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.width = even(width)
@@ -231,7 +231,7 @@ class FFmpegWriter:
         self.fps = max(fps, 1.0)
         self.frames_written = 0
         cmd = [
-            "ffmpeg",
+            ffmpeg,
             "-y",
             "-loglevel",
             "error",
@@ -300,12 +300,13 @@ class FFmpegWriter:
 
 def mux_audio(video_path: str | Path, source_path: str | Path, output_path: str | Path) -> bool:
     """Copy the source audio track onto a silent depth video. Returns True if muxed."""
-    if not shutil.which("ffmpeg"):
+    ffmpeg = find_tool("ffmpeg")
+    if not ffmpeg:
         return False
     video_path = Path(video_path)
     output_path = Path(output_path)
     cmd = [
-        "ffmpeg",
+        ffmpeg,
         "-y",
         "-loglevel",
         "error",

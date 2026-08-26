@@ -18,6 +18,7 @@ def test_health():
     assert body["ok"] is True
     assert "vits" in body["encoders"]
     assert "torch" in body
+    assert "ffmpeg" in body
     assert "device" in body
     assert "cpu_inference" in body
 
@@ -26,6 +27,7 @@ def test_index_served():
     res = client.get("/")
     assert res.status_code == 200
     assert "Depth Video Generator" in res.text
+    assert "ffmpegBanner" in res.text
 
 
 def test_job_converts_upload(tmp_path: Path):

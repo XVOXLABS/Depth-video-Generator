@@ -68,7 +68,10 @@ def _job_worker(
 ) -> None:
     """Child process: keeps torch CPU work off the web-server GIL."""
     os.environ.setdefault("DEPTH_VIDEO_JOB_WORKER", "1")
+    from depth_video.ffmpeg_bin import ensure_ffmpeg_on_path
     from depth_video.pipeline import CancelledError, ConversionOptions, convert_video
+
+    ensure_ffmpeg_on_path()
 
     progress_file = Path(progress_path)
     cancel_file = Path(cancel_path)

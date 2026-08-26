@@ -4,6 +4,9 @@ import subprocess
 from pathlib import Path
 
 
+from depth_video.ffmpeg_bin import require_ffmpeg
+
+
 def make_video(
     path: Path,
     seconds: float = 1.0,
@@ -13,7 +16,7 @@ def make_video(
 ) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
-        "ffmpeg",
+        require_ffmpeg(),
         "-y",
         "-loglevel",
         "error",

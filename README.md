@@ -17,8 +17,8 @@ The original research demo loads the whole clip into RAM. This app streams overl
 ## Requirements
 
 - Python 3.10+
-- [FFmpeg](https://ffmpeg.org/) on `PATH` (`ffmpeg` and `ffprobe`)
-- A NVIDIA GPU is strongly recommended for the neural model. CPU works but is slow.
+- [FFmpeg](https://ffmpeg.org/) (`ffmpeg` and `ffprobe`). On a Mac: `brew install ffmpeg`
+- A NVIDIA GPU is strongly recommended for the neural model. CPU works but is slow. Apple Silicon (MPS) is supported.
 
 ## Install
 
@@ -30,6 +30,8 @@ source .venv/bin/activate   # Windows: .venv\Scripts\activate
 python3 -m pip install -r requirements.txt
 # If conversion still says PyTorch is missing:
 python3 -m depth_video setup --cpu
+# On a Mac, FFmpeg is required to write the output MP4:
+brew install ffmpeg
 ```
 
 This project’s commands use `python3`. Some Linux images do not ship a `python` binary.

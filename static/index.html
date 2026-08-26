@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Depth Video Generator</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/styles.css?v=localhost-fix" />
+    <link rel="stylesheet" href="/styles.css?v=ffmpeg-fix" />
   </head>
   <body>
     <div class="bg-glow" aria-hidden="true"></div>
@@ -24,6 +24,12 @@
       In the same environment as <code>python3 app.py</code>, run
       <code>python3 -m pip install torch torchvision</code>
       (use a CUDA wheel from pytorch.org if you have an NVIDIA GPU), then restart the app.
+    </p>
+    <p class="banner" id="ffmpegBanner" hidden>
+      FFmpeg is required to write the depth MP4. On a Mac run
+      <code>brew install ffmpeg</code>
+      then restart the app with <code>python3 app.py --replace</code>.
+      If Homebrew already installed it, the app looks in <code>/opt/homebrew/bin</code>.
     </p>
     <p class="banner" id="cpuBanner" hidden>
       Running on CPU. The first 32-frame window often takes 30–90 seconds with little bar movement —
@@ -166,6 +172,6 @@
       Built on <a href="https://github.com/DepthAnything/Video-Depth-Anything" target="_blank" rel="noreferrer">Video Depth Anything</a>
       (CVPR 2025). Runs locally — videos stay on this machine.
     </footer>
-    <script src="/app.js?v=localhost-fix"></script>
+    <script src="/app.js?v=ffmpeg-fix"></script>
   </body>
 </html>
