@@ -1,0 +1,31 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Runtime data
+uploads/
+outputs/
+checkpoints/
+jobs/
+*.pth
+*.pt
+
+# Media produced at runtime
+*.mp4
+*.mov
+*.webm
+*.mkv
+*.avi
+!static/**
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+.env
+.env.*

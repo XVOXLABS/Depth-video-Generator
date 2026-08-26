@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Depth Video Generator</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css?v=ffmpeg-fix" />
+  </head>
+  <body>
+    <div class="bg-glow" aria-hidden="true"></div>
+    <header class="top">
+      <div class="brand">
+        <span class="mark" aria-hidden="true"></span>
+        <div>
+          <p class="eyebrow">Video Depth Anything</p>
+          <h1>Depth Video Generator</h1>
+        </div>
+      </div>
+      <div class="device" id="deviceChip">Detecting hardware…</div>
+    </header>
+    <p class="banner" id="torchBanner" hidden>
+      PyTorch is not installed for the Python running this app, so conversion cannot start.
+      In the same environment as <code>python3 app.py</code>, run
+      <code>python3 -m pip install torch torchvision</code>
+      (use a CUDA wheel from pytorch.org if you have an NVIDIA GPU), then restart the app.
+    </p>
+    <p class="banner" id="ffmpegBanner" hidden>
+      FFmpeg is required to write the depth MP4. On a Mac run
+      <code>brew install ffmpeg</code>
+      then restart the app with <code>python3 app.py --replace</code>.
+      If Homebrew already installed it, the app looks in <code>/opt/homebrew/bin</code>.
+    </p>
+    <p class="banner" id="cpuBanner" hidden>
+      Running on CPU. The first 32-frame window often takes 30–90 seconds with little bar movement —
+      that is the model working, not a hang. A GPU makes this much faster.
+    </p>
+
+    <main class="layout">
+      <section class="panel input-panel">
+        <label class="drop" id="dropZone" for="fileInput">
+          <input id="fileInput" type="file" accept="video/*" hidden />
+          <div class="drop-copy">
+            <strong>Drop any video here</strong>
+            <span>MP4, MOV, MKV, WebM, AVI · any length</span>
+          </div>
+          <div class="file-meta" id="fileMeta">No file selected</div>
+        </label>
+
+        <div class="preview-in" id="inputWrap" hidden>
+          <video id="inputVideo" controls playsinline></video>
+        </div>
+
+        <form id="settings" class="settings">
+          <div class="row">
+            <label>
+              Model
+              <select name="encoder" id="encoder">
+                <option value="vits" selected>Small · fastest (Apache-2.0)</option>
+                <option value="vitb">Base · balanced (non-commercial)</option>
+                <option value="vitl">Large · highest quality (non-commercial)</option>
+              </select>
+            </label>
+            <label>
+              Depth type
+              <select name="metric" id="metric">
+                <option value="false" selected>Relative</option>
+                <option value="true">Metric</option>
+              </select>
+            </label>
+          </div>
+          <div class="row">
+            <label>
+              Colormap
+              <select name="colormap" id="colormap">
+                <option value="inferno" selected>Inferno</option>
+                <option value="magma">Magma</option>
+                <option value="turbo">Turbo</option>
+                <option value="plasma">Plasma</option>
+                <option value="viridis">Viridis</option>
+                <option value="gray">Grayscale</option>
+              </select>
+            </label>
+            <label>
+              Layout
+              <select name="layout" id="layout">
+                <option value="depth" selected>Depth only</option>
+                <option value="side_by_side">Side by side</option>
+              </select>
+            </label>
+          </div>
+          <details>
+            <summary>Advanced</summary>
+            <div class="row">
+              <label>
+                Max resolution
+                <input type="number" name="max_res" id="max_res" min="256" max="1920" step="2" value="1280" />
+              </label>
+              <label>
+                Target FPS
+                <input type="number" name="target_fps" id="target_fps" min="-1" max="60" step="1" value="-1" />
+                <small>−1 keeps the original frame rate</small>
+              </label>
+            </div>
+            <div class="row">
+              <label>
+                Max frames
+                <input type="number" name="max_len" id="max_len" min="-1" step="1" value="-1" />
+                <small>−1 processes the entire video</small>
+              </label>
+              <label>
+                Model input size
+                <input type="number" name="input_size" id="input_size" min="196" max="770" step="14" value="518" />
+                <small>518 is the trained size. Lower this on CPU.</small>
+              </label>
+            </div>
+            <div class="row">
+              <label>
+                Inference
+                <select name="mode" id="mode">
+                  <option value="windowed" selected>Windowed · official quality</option>
+                  <option value="streaming">Streaming · lower VRAM</option>
+                </select>
+              </label>
+              <span></span>
+            </div>
+            <div class="toggles">
+              <label class="check"><input type="checkbox" id="keep_audio" checked /> Keep original audio</label>
+              <label class="check"><input type="checkbox" id="invert" /> Invert depth</label>
+              <label class="check"><input type="checkbox" id="use_fp16" checked /> FP16 when CUDA is available</label>
+            </div>
+          </details>
+        </form>
+
+        <div class="actions">
+          <button type="button" class="primary" id="convertBtn" disabled>Generate depth video</button>
+          <button type="button" class="ghost" id="cancelBtn" hidden>Cancel</button>
+        </div>
+        <p class="hint">
+          Long videos stream in overlapping 32-frame windows, so length is not limited by RAM.
+          The Small model is Apache-2.0. Base and Large checkpoints are CC-BY-NC-4.0.
+        </p>
+      </section>
+
+      <section class="panel output-panel">
+        <div class="status" id="statusCard">
+          <div class="status-top">
+            <span id="statusLabel">Ready</span>
+            <span id="statusPct">0%</span>
+          </div>
+          <div class="bar"><div id="barFill"></div></div>
+          <p id="statusMessage">Upload a video to convert it into a consistent depth map sequence.</p>
+        </div>
+
+        <div class="player-grid">
+          <figure>
+            <figcaption>Source</figcaption>
+            <video id="sourcePlayer" controls playsinline></video>
+          </figure>
+          <figure>
+            <figcaption>Depth</figcaption>
+            <video id="depthPlayer" controls playsinline></video>
+          </figure>
+        </div>
+
+        <a class="download" id="downloadBtn" hidden>Download depth MP4</a>
+        <p class="hint" id="resultHint" hidden></p>
+      </section>
+    </main>
+
+    <footer>
+      Built on <a href="https://github.com/DepthAnything/Video-Depth-Anything" target="_blank" rel="noreferrer">Video Depth Anything</a>
+      (CVPR 2025). Runs locally — videos stay on this machine.
+    </footer>
+    <script src="/app.js?v=ffmpeg-fix"></script>
+  </body>
+</html>
