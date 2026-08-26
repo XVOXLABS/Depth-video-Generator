@@ -281,7 +281,12 @@ class FFmpegWriter:
                 self._proc.stdin.close()
             except BrokenPipeError:
                 pass
-        code = self._proc.wait()
+        try:
+            code = self._proc.wait(timeout=120)
+        except subprocess.TimeoutExpired:
+            self._proc.kill()
+            self._proc.wait(timeout=10)
+            raise RuntimeError(f"ffmpeg timed out while writing {self.path}")
         self._proc = None
         if code != 0:
             raise RuntimeError(f"ffmpeg exited with status {code} while writing {self.path}")
@@ -321,5 +326,8 @@ def mux_audio(video_path: str | Path, source_path: str | Path, output_path: str 
         "+faststart",
         str(output_path),
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    except subprocess.TimeoutExpired:
+        return False
     return result.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0

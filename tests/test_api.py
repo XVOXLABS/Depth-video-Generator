@@ -19,6 +19,7 @@ def test_health():
     assert "vits" in body["encoders"]
     assert "torch" in body
     assert "device" in body
+    assert "cpu_inference" in body
 
 
 def test_index_served():
@@ -44,7 +45,7 @@ def test_job_converts_upload(tmp_path: Path):
     job_id = res.json()["id"]
 
     snapshot = None
-    for _ in range(80):
+    for _ in range(200):
         snapshot = client.get(f"/api/jobs/{job_id}").json()
         if snapshot["status"] in {"done", "error"}:
             break

@@ -17,9 +17,20 @@ const deviceChip = document.getElementById("deviceChip");
 let selectedFile = null;
 let currentJob = null;
 let eventSource = null;
+let lastJob = null;
+
+function formatElapsed(seconds) {
+  const total = Math.max(0, Math.round(seconds || 0));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
 
 function setStatus(label, message, progress) {
-  statusLabel.textContent = label;
+  const elapsed = lastJob && ["queued", "running"].includes(lastJob.status)
+    ? ` · ${formatElapsed(lastJob.elapsed_s)}`
+    : "";
+  statusLabel.textContent = label + elapsed;
   statusMessage.textContent = message;
   const pct = Math.max(0, Math.min(100, Math.round((progress || 0) * 100)));
   statusPct.textContent = `${pct}%`;
@@ -65,8 +76,10 @@ async function loadHealth() {
     const res = await fetch("/api/health");
     const data = await res.json();
     deviceChip.textContent = data.device_name || data.device;
-    const banner = document.getElementById("torchBanner");
-    if (banner) banner.hidden = Boolean(data.torch);
+    const torchBanner = document.getElementById("torchBanner");
+    if (torchBanner) torchBanner.hidden = Boolean(data.torch);
+    const cpuBanner = document.getElementById("cpuBanner");
+    if (cpuBanner) cpuBanner.hidden = !data.cpu_inference || !data.torch;
   } catch {
     deviceChip.textContent = "Server offline";
   }
@@ -102,9 +115,14 @@ function listen(jobId) {
       eventSource = null;
     }
   };
+  eventSource.onerror = () => {
+    if (!lastJob || ["done", "error", "cancelled"].includes(lastJob.status)) return;
+    setStatus("Converting", "Still working… if this sits on 0% for several minutes on CPU, wait for the first 32-frame window to finish.", lastJob.progress);
+  };
 }
 
 function applyJob(job) {
+  lastJob = job;
   currentJob = job.id;
   const labels = {
     queued: "Queued",

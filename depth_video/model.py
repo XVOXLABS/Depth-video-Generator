@@ -92,6 +92,11 @@ class VideoDepthAnythingBackend:
             state = torch.load(ckpt, map_location="cpu")
         model.load_state_dict(state, strict=True)
         self.model = model.to(self.torch_device).eval()
+        try:
+            cpu_count = os.cpu_count() or 4
+            torch.set_num_threads(max(1, cpu_count - 1))
+        except Exception:
+            pass
 
     def _autocast(self):
         torch = self._torch

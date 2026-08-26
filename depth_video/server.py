@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from depth_video.device import detect_device
-from depth_video.jobs import MANAGER
+from depth_video.jobs import get_manager
 from depth_video.paths import STATIC_DIR, UPLOADS_DIR, ensure_runtime_dirs
 from depth_video.pipeline import ConversionOptions
 from depth_video.weights import ENCODERS
@@ -50,6 +50,7 @@ def health():
         "device_name": device.name,
         "fp16": device.supports_fp16,
         "encoders": list(ENCODERS),
+        "cpu_inference": device.kind == "cpu",
     }
 
 
@@ -106,13 +107,13 @@ async def create_job(
         mode=mode,
         use_fp16=as_bool(use_fp16),
     )
-    job = MANAGER.create(temp_path, original, options)
+    job = get_manager().create(temp_path, original, options)
     return JSONResponse(job.snapshot())
 
 
 @app.get("/api/jobs/{job_id}")
 def get_job(job_id: str):
-    job = MANAGER.get(job_id)
+    job = get_manager().get(job_id)
     if job is None:
         raise HTTPException(404, "Unknown job")
     return job.snapshot()
@@ -120,7 +121,7 @@ def get_job(job_id: str):
 
 @app.post("/api/jobs/{job_id}/cancel")
 def cancel_job(job_id: str):
-    job = MANAGER.request_cancel(job_id)
+    job = get_manager().request_cancel(job_id)
     if job is None:
         raise HTTPException(404, "Unknown job")
     return job.snapshot()
@@ -128,13 +129,13 @@ def cancel_job(job_id: str):
 
 @app.get("/api/jobs/{job_id}/events")
 async def job_events(job_id: str):
-    if MANAGER.get(job_id) is None:
+    if get_manager().get(job_id) is None:
         raise HTTPException(404, "Unknown job")
 
     async def generate():
         last = None
         while True:
-            job = MANAGER.get(job_id)
+            job = get_manager().get(job_id)
             if job is None:
                 break
             snap = job.snapshot()
@@ -149,13 +150,13 @@ async def job_events(job_id: str):
     return StreamingResponse(
         generate(),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
     )
 
 
 @app.get("/api/jobs/{job_id}/video")
 def job_video(job_id: str):
-    job = MANAGER.get(job_id)
+    job = get_manager().get(job_id)
     if job is None or not job.output_path or not job.output_path.exists():
         raise HTTPException(404, "Output not ready")
     return FileResponse(job.output_path, media_type="video/mp4", filename=job.output_path.name)
@@ -163,7 +164,7 @@ def job_video(job_id: str):
 
 @app.get("/api/jobs/{job_id}/download")
 def job_download(job_id: str):
-    job = MANAGER.get(job_id)
+    job = get_manager().get(job_id)
     if job is None or not job.output_path or not job.output_path.exists():
         raise HTTPException(404, "Output not ready")
     return FileResponse(

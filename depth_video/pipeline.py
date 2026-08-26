@@ -245,6 +245,18 @@ def _run_windowed(
 
     def run_window() -> None:
         nonlocal reuse_input, window_index
+        device = getattr(backend, "device_name", "CPU")
+        _emit(
+            progress,
+            stage="infer",
+            message=(
+                f"Window {window_index + 1}: 32-frame inference on {device}. "
+                "On CPU this step often takes 30–90 seconds — the bar will jump after it finishes."
+            ),
+            progress=_progress_fraction(emitter.emitted, emitter.source_limit or total_hint),
+            frames_done=emitter.emitted,
+            frames_total=emitter.source_limit or total_hint,
+        )
         sources = pending[:INFER_LEN]
         depths, reuse_input = backend.infer_window(sources, reuse_input=reuse_input)
         aligned = aligner.add_window(depths)
@@ -276,9 +288,14 @@ def _run_windowed(
         raise ValueError("The input file has no readable video frames")
 
     emitter.source_limit = source_len
+    max_windows = max(source_len // FRAME_STEP + 8, 8)
+    guard = 0
 
     while emitter.emitted < source_len:
         _maybe_cancel(should_cancel)
+        guard += 1
+        if guard > max_windows:
+            raise RuntimeError("Conversion loop ran too many windows; the input may be unreadable")
         while len(pending) < INFER_LEN:
             pending.append(last_frame)
         run_window()

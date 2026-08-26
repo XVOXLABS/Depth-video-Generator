@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import multiprocessing as mp
+import os
 import shutil
 import threading
 import time
@@ -9,8 +11,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from depth_video.paths import JOBS_DIR, OUTPUTS_DIR, UPLOADS_DIR, ensure_runtime_dirs
-from depth_video.pipeline import ConversionOptions, convert_video
+from depth_video.paths import JOBS_DIR, OUTPUTS_DIR, ensure_runtime_dirs
+from depth_video.pipeline import ConversionOptions
 
 
 @dataclass
@@ -22,6 +24,7 @@ class Job:
     stage: str = "queued"
     error: str | None = None
     created_at: float = field(default_factory=time.time)
+    started_at: float | None = None
     updated_at: float = field(default_factory=time.time)
     input_path: Path | None = None
     output_path: Path | None = None
@@ -29,6 +32,12 @@ class Job:
     options: dict[str, Any] = field(default_factory=dict)
     result: dict[str, Any] | None = None
     cancel: bool = False
+    process: Any = field(default=None, repr=False)
+
+    def elapsed_s(self) -> float:
+        start = self.started_at or self.created_at
+        end = time.time() if self.status in {"queued", "running"} else self.updated_at
+        return max(0.0, end - start)
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -39,12 +48,75 @@ class Job:
             "stage": self.stage,
             "error": self.error,
             "created_at": self.created_at,
+            "started_at": self.started_at,
             "updated_at": self.updated_at,
+            "elapsed_s": self.elapsed_s(),
             "original_name": self.original_name,
             "options": self.options,
             "result": self.result,
             "has_output": bool(self.output_path and self.output_path.exists()),
         }
+
+
+def _job_worker(
+    input_path: str,
+    output_path: str,
+    options_dict: dict[str, Any],
+    progress_path: str,
+    cancel_path: str,
+    result_path: str,
+) -> None:
+    """Child process: keeps torch CPU work off the web-server GIL."""
+    os.environ.setdefault("DEPTH_VIDEO_JOB_WORKER", "1")
+    from depth_video.pipeline import CancelledError, ConversionOptions, convert_video
+
+    progress_file = Path(progress_path)
+    cancel_file = Path(cancel_path)
+    result_file = Path(result_path)
+
+    def write_state(**payload: Any) -> None:
+        payload.setdefault("updated_at", time.time())
+        tmp = progress_file.with_suffix(".tmp")
+        tmp.write_text(json.dumps(payload))
+        tmp.replace(progress_file)
+
+    def on_progress(payload: dict) -> None:
+        body = {k: v for k, v in payload.items() if k != "result"}
+        write_state(status="running", result=payload.get("result"), **body)
+
+    try:
+        write_state(status="running", stage="load", message="Starting conversion…", progress=0.02)
+        result = convert_video(
+            input_path,
+            output_path,
+            options=ConversionOptions(**options_dict),
+            progress=on_progress,
+            should_cancel=lambda: cancel_file.exists(),
+        )
+        snapshot = {
+            "status": "done",
+            "stage": "done",
+            "progress": 1.0,
+            "message": f"Done · {result.frames} frames in {result.elapsed_s:.1f}s",
+            "result": {
+                "output_path": str(result.output_path),
+                "frames": result.frames,
+                "fps": result.fps,
+                "width": result.width,
+                "height": result.height,
+                "elapsed_s": result.elapsed_s,
+                "device": result.device,
+            },
+        }
+        result_file.write_text(json.dumps(snapshot, indent=2))
+        write_state(**snapshot)
+    except CancelledError:
+        write_state(status="cancelled", stage="cancelled", message="Cancelled", progress=0.0)
+    except Exception as exc:
+        if cancel_file.exists():
+            write_state(status="cancelled", stage="cancelled", message="Cancelled", progress=0.0)
+        else:
+            write_state(status="error", stage="error", message=f"Failed: {exc}", error=str(exc), progress=0.0)
 
 
 class JobManager:
@@ -55,6 +127,7 @@ class JobManager:
         self._worker = threading.Thread(target=self._run_loop, daemon=True)
         self._wake = threading.Event()
         self._queue: list[str] = []
+        self._ctx = mp.get_context("spawn")
         self._worker.start()
 
     def create(self, upload_path: Path, original_name: str, options: ConversionOptions) -> Job:
@@ -89,6 +162,11 @@ class JobManager:
                 job.cancel = True
                 job.message = "Cancelling…"
                 job.updated_at = time.time()
+                cancel_path = JOBS_DIR / job.id / "cancel"
+                cancel_path.parent.mkdir(parents=True, exist_ok=True)
+                cancel_path.touch()
+                if job.process is not None and job.process.is_alive():
+                    job.process.terminate()
             return job
 
     def _run_loop(self) -> None:
@@ -102,6 +180,25 @@ class JobManager:
             if job_id:
                 self._execute(job_id)
 
+    def _apply_progress_file(self, job: Job, progress_path: Path) -> None:
+        if not progress_path.exists():
+            return
+        try:
+            payload = json.loads(progress_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            return
+        job.message = str(payload.get("message") or job.message)
+        if payload.get("progress") is not None:
+            job.progress = float(payload["progress"])
+        job.stage = str(payload.get("stage") or job.stage)
+        if payload.get("status") in {"running", "done", "error", "cancelled"}:
+            if job.status == "running" or payload["status"] != "running":
+                job.status = payload["status"]
+        job.error = payload.get("error") or job.error
+        if payload.get("result"):
+            job.result = payload["result"]
+        job.updated_at = time.time()
+
     def _execute(self, job_id: str) -> None:
         job = self.get(job_id)
         if job is None or job.input_path is None or job.output_path is None:
@@ -114,50 +211,55 @@ class JobManager:
         job.status = "running"
         job.stage = "load"
         job.message = "Starting conversion…"
+        job.started_at = time.time()
         job.updated_at = time.time()
 
-        def on_progress(payload: dict) -> None:
-            job.message = str(payload.get("message") or job.message)
-            if payload.get("progress") is not None:
-                job.progress = float(payload["progress"])
-            job.stage = str(payload.get("stage") or job.stage)
-            job.updated_at = time.time()
-            if payload.get("result"):
-                job.result = payload["result"]
+        job_dir = JOBS_DIR / job.id
+        progress_path = job_dir / "progress.json"
+        cancel_path = job_dir / "cancel"
+        result_path = job_dir / "result.json"
 
-        try:
-            options = ConversionOptions(**job.options)
-            result = convert_video(
-                job.input_path,
-                job.output_path,
-                options=options,
-                progress=on_progress,
-                should_cancel=lambda: job.cancel,
-            )
-            job.status = "done"
-            job.progress = 1.0
-            job.stage = "done"
-            job.result = {
-                "output_path": str(result.output_path),
-                "frames": result.frames,
-                "fps": result.fps,
-                "width": result.width,
-                "height": result.height,
-                "elapsed_s": result.elapsed_s,
-                "device": result.device,
-            }
-            job.message = f"Done · {result.frames} frames in {result.elapsed_s:.1f}s"
-            (JOBS_DIR / job.id / "result.json").write_text(json.dumps(job.snapshot(), indent=2))
-        except Exception as exc:
-            if job.cancel:
-                job.status = "cancelled"
-                job.message = "Cancelled"
-            else:
-                job.status = "error"
-                job.error = str(exc)
-                job.message = f"Failed: {exc}"
-        finally:
-            job.updated_at = time.time()
+        proc = self._ctx.Process(
+            target=_job_worker,
+            args=(
+                str(job.input_path),
+                str(job.output_path),
+                job.options,
+                str(progress_path),
+                str(cancel_path),
+                str(result_path),
+            ),
+        )
+        job.process = proc
+        proc.start()
+        while proc.is_alive():
+            if job.cancel and proc.is_alive():
+                proc.terminate()
+                break
+            self._apply_progress_file(job, progress_path)
+            time.sleep(0.25)
+        proc.join(timeout=15)
+        self._apply_progress_file(job, progress_path)
+        if job.cancel and job.status == "running":
+            job.status = "cancelled"
+            job.message = "Cancelled"
+        elif proc.exitcode not in (0, None) and job.status == "running":
+            job.status = "error"
+            job.error = f"Converter exited with code {proc.exitcode}"
+            job.message = f"Failed: {job.error}"
+        elif result_path.exists() and job.status == "running":
+            self._apply_progress_file(job, result_path)
+        job.updated_at = time.time()
+        job.process = None
 
 
-MANAGER = JobManager()
+_manager: JobManager | None = None
+_manager_lock = threading.Lock()
+
+
+def get_manager() -> JobManager:
+    global _manager
+    with _manager_lock:
+        if _manager is None:
+            _manager = JobManager()
+        return _manager
