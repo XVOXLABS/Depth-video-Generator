@@ -77,15 +77,35 @@ def existing_app_url(port: int) -> str | None:
 
 
 def pids_listening(port: int) -> list[int]:
-    try:
-        out = subprocess.check_output(["ss", "-ltnp", f"sport = :{port}"], text=True)
-    except (FileNotFoundError, subprocess.CalledProcessError, OSError):
-        return []
     found: list[int] = []
-    for match in re.finditer(r"pid=(\d+)", out):
-        pid = int(match.group(1))
-        if pid not in found:
+
+    def add(pid: int) -> None:
+        if pid > 1 and pid not in found:
             found.append(pid)
+
+    probes = [
+        ["lsof", "-t", f"-iTCP:{port}", "-sTCP:LISTEN"],
+        ["fuser", f"{port}/tcp"],
+        ["ss", "-ltnp"],
+        ["netstat", "-ltnp"],
+    ]
+    for cmd in probes:
+        try:
+            out = subprocess.check_output(cmd, text=True, stderr=subprocess.STDOUT)
+        except (FileNotFoundError, subprocess.CalledProcessError, OSError):
+            continue
+        if cmd[0] in {"lsof", "fuser"}:
+            for token in re.findall(r"\d+", out):
+                add(int(token))
+            if found:
+                return found
+        for line in out.splitlines():
+            if not re.search(rf":{port}\b", line):
+                continue
+            for match in re.finditer(r"(?:pid=|LISTEN\s+|[\s/])(\d+)", line):
+                add(int(match.group(1)))
+        if found:
+            return found
     return found
 
 
@@ -99,7 +119,8 @@ def terminate_port(port: int, timeout: float = 8.0) -> None:
         except ProcessLookupError:
             pass
     while time.time() < deadline:
-        if not pids_listening(port) and (can_bind("0.0.0.0", port) or can_bind("127.0.0.1", port)):
+        remaining = [pid for pid in pids_listening(port) if pid != os.getpid()]
+        if not remaining:
             return
         time.sleep(0.15)
     for pid in pids_listening(port):

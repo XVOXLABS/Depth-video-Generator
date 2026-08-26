@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import os
 import socket
 from pathlib import Path
 
-from depth_video.cli import can_bind, choose_port, main
+from depth_video.cli import can_bind, choose_port, main, pids_listening
 from depth_video.video_io import probe_video, write_demo_clip
 
 
@@ -29,6 +30,18 @@ def test_demo_command_fake(tmp_path: Path):
     assert (tmp_path / "demo.mp4").exists()
     depth = tmp_path / "demo_depth.mp4"
     assert depth.exists() and depth.stat().st_size > 0
+
+
+def test_pids_listening_finds_listener():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(("127.0.0.1", 0))
+    sock.listen(1)
+    port = sock.getsockname()[1]
+    try:
+        assert os.getpid() in pids_listening(port)
+    finally:
+        sock.close()
 
 
 def test_can_bind_detects_occupied_port():
