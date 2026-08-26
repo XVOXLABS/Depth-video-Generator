@@ -28,9 +28,11 @@ cd Depth-video-Generator
 python3 -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 python3 -m pip install -r requirements.txt
+# If conversion still says PyTorch is missing:
+python3 -m depth_video setup --cpu
 ```
 
-This project’s commands use `python3`. Some Linux images (including this one) do not ship a `python` binary.
+This project’s commands use `python3`. Some Linux images do not ship a `python` binary.
 
 For NVIDIA GPUs, install a CUDA build of PyTorch instead of the CPU wheel:
 

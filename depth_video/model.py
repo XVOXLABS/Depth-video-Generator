@@ -207,10 +207,13 @@ def create_backend(
     try:
         import torch  # noqa: F401
     except ImportError as exc:
+        import sys
+
         raise RuntimeError(
-            "PyTorch is required for Video Depth Anything. "
-            "Install it with `pip install torch torchvision` "
-            "(use the CUDA wheel from pytorch.org if you have an NVIDIA GPU)."
+            "PyTorch is not installed for this Python "
+            f"({sys.executable}). Install it with:\n"
+            f"  {sys.executable} -m pip install torch torchvision\n"
+            "For NVIDIA GPUs use the CUDA wheel from https://pytorch.org"
         ) from exc
     return VideoDepthAnythingBackend(
         encoder=encoder,

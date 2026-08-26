@@ -18,6 +18,7 @@ let selectedFile = null;
 let currentJob = null;
 let eventSource = null;
 let lastJob = null;
+let torchReady = false;
 
 function formatElapsed(seconds) {
   const total = Math.max(0, Math.round(seconds || 0));
@@ -50,9 +51,13 @@ function useFile(file) {
   inputVideo.src = url;
   sourcePlayer.src = url;
   inputWrap.hidden = false;
-  convertBtn.disabled = false;
+  convertBtn.disabled = !torchReady;
   downloadBtn.hidden = true;
   depthPlayer.removeAttribute("src");
+  if (!torchReady) {
+    setStatus("Setup needed", "Install PyTorch with python3 -m pip install torch torchvision, then restart the app.", 0);
+    return;
+  }
   setStatus("Ready", "File loaded. Choose a model and generate a depth video.", 0);
 }
 
@@ -75,11 +80,17 @@ async function loadHealth() {
   try {
     const res = await fetch("/api/health");
     const data = await res.json();
+    torchReady = Boolean(data.torch);
     deviceChip.textContent = data.device_name || data.device;
     const torchBanner = document.getElementById("torchBanner");
-    if (torchBanner) torchBanner.hidden = Boolean(data.torch);
+    if (torchBanner) torchBanner.hidden = torchReady;
     const cpuBanner = document.getElementById("cpuBanner");
-    if (cpuBanner) cpuBanner.hidden = !data.cpu_inference || !data.torch;
+    if (cpuBanner) cpuBanner.hidden = !data.cpu_inference || !torchReady;
+    if (!torchReady) {
+      convertBtn.disabled = true;
+    } else if (selectedFile) {
+      convertBtn.disabled = false;
+    }
   } catch {
     deviceChip.textContent = "Server offline";
   }
@@ -138,12 +149,16 @@ function applyJob(job) {
     depthPlayer.src = `/api/jobs/${job.id}/video?t=${Date.now()}`;
     downloadBtn.href = `/api/jobs/${job.id}/download`;
     downloadBtn.hidden = false;
-    convertBtn.disabled = !selectedFile;
+    convertBtn.disabled = !selectedFile || !torchReady;
   }
 }
 
 convertBtn.addEventListener("click", async () => {
   if (!selectedFile) return;
+  if (!torchReady) {
+    setStatus("Setup needed", "Install PyTorch first: python3 -m pip install torch torchvision", 0);
+    return;
+  }
   convertBtn.disabled = true;
   setStatus("Uploading", "Sending video to the converter…", 0.02);
   try {
@@ -154,7 +169,7 @@ convertBtn.addEventListener("click", async () => {
     listen(job.id);
   } catch (error) {
     setStatus("Failed", error.message || "Could not start conversion", 0);
-    convertBtn.disabled = !selectedFile;
+    convertBtn.disabled = !selectedFile || !torchReady;
   }
 });
 

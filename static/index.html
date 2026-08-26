@@ -26,12 +26,17 @@
       <div class="device" id="deviceChip">Detecting hardware…</div>
     </header>
     <p class="banner" id="torchBanner" hidden>
-      PyTorch is not installed, so the neural model cannot run. Install it with
-      <code>pip install -r requirements.txt</code> (use a CUDA wheel if you have an NVIDIA GPU).
+      PyTorch is not installed for the Python running this app, so conversion cannot start.
+      In the same environment as <code>python3 app.py</code>, run
+      <code>python3 -m pip install torch torchvision</code>
+      (use a CUDA wheel from pytorch.org if you have an NVIDIA GPU), then restart the app.
+    </p>
     <p class="banner" id="cpuBanner" hidden>
       Running on CPU. The first 32-frame window often takes 30–90 seconds with little bar movement —
       that is the model working, not a hang. A GPU makes this much faster.
     </p>
+
+    <main class="layout">
       <section class="panel input-panel">
         <label class="drop" id="dropZone" for="fileInput">
           <input id="fileInput" type="file" accept="video/*" hidden />

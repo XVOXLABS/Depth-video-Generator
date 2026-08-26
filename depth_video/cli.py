@@ -47,6 +47,9 @@ def build_parser() -> argparse.ArgumentParser:
     demo.add_argument("-o", "--output-dir", type=Path, default=Path("examples"))
     demo.add_argument("--encoder", choices=ENCODERS, default="vits")
     demo.add_argument("--fake", action="store_true")
+
+    setup = sub.add_parser("setup", help="Install PyTorch for this Python interpreter")
+    setup.add_argument("--cpu", action="store_true", help="Install the CPU wheel from pytorch.org")
     return parser
 
 
@@ -172,6 +175,16 @@ def cmd_demo(args: argparse.Namespace) -> int:
     return cmd_convert(demo_args)
 
 
+def cmd_setup(args: argparse.Namespace) -> int:
+    import subprocess
+
+    cmd = [sys.executable, "-m", "pip", "install", "torch", "torchvision"]
+    if args.cpu:
+        cmd += ["--index-url", "https://download.pytorch.org/whl/cpu"]
+    print("Running:", " ".join(cmd))
+    return subprocess.call(cmd)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -181,6 +194,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_convert(args)
     if args.command == "demo":
         return cmd_demo(args)
+    if args.command == "setup":
+        return cmd_setup(args)
     parser.print_help()
     return 2
 
