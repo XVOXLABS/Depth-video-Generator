@@ -14,8 +14,38 @@ def _run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(cmd, check=True, capture_output=True, text=True)
 
 
-def has_ffmpeg() -> bool:
-    return shutil.which("ffmpeg") is not None and shutil.which("ffprobe") is not None
+def write_demo_clip(
+    path: str | Path,
+    seconds: float = 2.0,
+    fps: int = 12,
+    size: str = "640x360",
+) -> Path:
+    """Write a short synthetic MP4 so a first run does not need an input file."""
+    if not shutil.which("ffmpeg"):
+        raise RuntimeError("ffmpeg is required to create a demo clip")
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _run(
+        [
+            "ffmpeg",
+            "-y",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            f"testsrc=duration={seconds}:size={size}:rate={fps}",
+            "-f",
+            "lavfi",
+            "-i",
+            f"sine=frequency=440:duration={seconds}",
+            "-pix_fmt",
+            "yuv420p",
+            "-shortest",
+            str(path),
+        ]
+    )
+    return path
 
 
 @dataclass

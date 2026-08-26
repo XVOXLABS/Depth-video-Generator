@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from depth_video.pipeline import ConversionOptions, convert_video
+from depth_video.video_io import write_demo_clip
 from depth_video.weights import ENCODERS
 
 
@@ -37,6 +38,11 @@ def build_parser() -> argparse.ArgumentParser:
     convert.add_argument("--mode", choices=["windowed", "streaming"], default="windowed")
     convert.add_argument("--fp32", action="store_true")
     convert.add_argument("--fake", action="store_true", help="Use a luminance stand-in instead of the neural model")
+
+    demo = sub.add_parser("demo", help="Create a short sample clip and convert it")
+    demo.add_argument("-o", "--output-dir", type=Path, default=Path("examples"))
+    demo.add_argument("--encoder", choices=ENCODERS, default="vits")
+    demo.add_argument("--fake", action="store_true")
     return parser
 
 
@@ -52,6 +58,7 @@ def cmd_convert(args: argparse.Namespace) -> int:
         os.environ["DEPTH_VIDEO_BACKEND"] = "fake"
     if not args.input.exists():
         print(f"Input not found: {args.input}", file=sys.stderr)
+        print("Pass a real video path, or run: python3 -m depth_video demo", file=sys.stderr)
         return 2
     output = args.output or args.input.with_name(args.input.stem + "_depth.mp4")
     options = ConversionOptions(
@@ -85,6 +92,31 @@ def cmd_convert(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_demo(args: argparse.Namespace) -> int:
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    source = write_demo_clip(args.output_dir / "demo.mp4")
+    print(f"Wrote sample clip {source}")
+    demo_args = argparse.Namespace(
+        input=source,
+        output=args.output_dir / "demo_depth.mp4",
+        encoder=args.encoder,
+        metric=False,
+        input_size=518,
+        max_res=640,
+        target_fps=-1,
+        max_len=-1,
+        colormap="inferno",
+        invert=False,
+        grayscale=False,
+        no_audio=False,
+        side_by_side=False,
+        mode="windowed",
+        fp32=False,
+        fake=args.fake,
+    )
+    return cmd_convert(demo_args)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -92,6 +124,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_serve(args)
     if args.command == "convert":
         return cmd_convert(args)
+    if args.command == "demo":
+        return cmd_demo(args)
     parser.print_help()
     return 2
 

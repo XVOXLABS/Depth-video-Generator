@@ -25,21 +25,23 @@ The original research demo loads the whole clip into RAM. This app streams overl
 ```bash
 git clone https://github.com/XVOXLABS/Depth-video-Generator.git
 cd Depth-video-Generator
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+python3 -m pip install -r requirements.txt
 ```
+
+This project’s commands use `python3`. Some Linux images (including this one) do not ship a `python` binary.
 
 For NVIDIA GPUs, install a CUDA build of PyTorch instead of the CPU wheel:
 
 ```bash
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+python3 -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
 ```
 
 Weights download automatically on first run. To prefetch the Small model:
 
 ```bash
-python -m depth_video convert --help
+python3 -m depth_video convert --help
 ```
 
 The first conversion of a given encoder/metric pair stores checkpoints in `./checkpoints/` (override with `DEPTH_VIDEO_CHECKPOINTS`).
@@ -47,7 +49,7 @@ The first conversion of a given encoder/metric pair stores checkpoints in `./che
 ## Web app
 
 ```bash
-python app.py
+python3 app.py
 ```
 
 Then open [http://127.0.0.1:7860](http://127.0.0.1:7860). Drop a video of any length, pick a model, and generate. The Small encoder is the default (Apache-2.0, fastest). Use Base or Large when you have more VRAM and want higher quality.
@@ -64,12 +66,18 @@ Useful environment variables:
 ## Command line
 
 ```bash
-python -m depth_video convert input.mp4 -o output_depth.mp4 --encoder vits
+# Create a 2-second sample and convert it (no input file required)
+python3 -m depth_video demo
 
-python -m depth_video convert input.mp4 --side-by-side --colormap magma --encoder vitl
+# Convert your own video
+python3 -m depth_video convert your_video.mp4 -o depth.mp4 --encoder vits
 
-python -m depth_video convert long.mkv --mode streaming --max-res 960
+python3 -m depth_video convert your_video.mp4 --side-by-side --colormap magma --encoder vitl
+
+python3 -m depth_video convert long.mkv --mode streaming --max-res 960
 ```
+
+`./depth-video` is a wrapper that calls `python3` (then `python` if needed), so `./depth-video demo` also works.
 
 `--max-len -1` (default) processes the entire file. `--target-fps -1` keeps the source frame rate.
 
@@ -100,8 +108,8 @@ Base and Large checkpoints are **non-commercial**. For commercial use, stick to 
 ## Tests
 
 ```bash
-pip install -r requirements.txt
-pytest -q
+python3 -m pip install -r requirements.txt
+python3 -m pytest -q
 ```
 
 Tests use a fake luminance backend and synthetic FFmpeg clips, so they do not download multi-hundred-megabyte weights.
