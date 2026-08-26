@@ -194,10 +194,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
 
 def print_browser_hint(port: int) -> None:
-    print(f"Open http://127.0.0.1:{port} in a browser on THIS computer.")
-    print("localhost only works on the machine that is running python3 app.py.")
-    print("A Cursor Cloud Agent is a remote VM — your laptop's localhost will not reach it.")
-    print("Use Take control on the agent desktop, or clone the branch and run python3 app.py locally.")
+    print(f"Open http://127.0.0.1:{port} in your browser.")
 
 
 def cmd_convert(args: argparse.Namespace) -> int:

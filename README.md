@@ -50,25 +50,19 @@ python3 -m depth_video convert --help
 
 The first conversion of a given encoder/metric pair stores checkpoints in `./checkpoints/` (override with `DEPTH_VIDEO_CHECKPOINTS`).
 
-## Web app
+## Web app (run on your Mac or PC)
 
-The UI is a **local** server. The browser has to run on the **same computer** as `python3 app.py`. Opening `http://localhost:7860` on your laptop will not work if the process is running in a Cursor Cloud Agent (that is a different machine).
-
-### On your computer
+This is a local app. Run it in Terminal on your computer, then open the URL in that computer’s browser.
 
 ```bash
 python3 app.py
 ```
 
-Then open [http://127.0.0.1:7860](http://127.0.0.1:7860) in a browser on that same machine. If the port is already taken by this app, the command prints the live URL instead of starting a second copy. Restart with new code:
+Open [http://127.0.0.1:7860](http://127.0.0.1:7860). If port 7860 is already in use, restart with:
 
 ```bash
 python3 app.py --replace
 ```
-
-### In a Cursor Cloud Agent
-
-Use **Take control** on the agent desktop and open `http://127.0.0.1:7860` there, or check this branch out locally and run the commands above.
 
 Drop a video of any length, pick a model, and generate. When it finishes, the depth clip plays on the right and **Download depth MP4** saves the file. The Small encoder is the default (Apache-2.0, fastest). Use Base or Large when you have more VRAM and want higher quality.
 

@@ -64,7 +64,7 @@ def test_serve_reports_existing_app(monkeypatch, capsys):
     assert code == 0
     assert "already running at http://127.0.0.1:7860" in captured.out
     assert "python3 app.py --replace" in captured.out
-    assert "same computer" in captured.out.lower() or "THIS computer" in captured.out
+    assert "http://127.0.0.1:7860" in captured.out
 
 
 def test_serve_replace_skips_reuse(monkeypatch, capsys):
